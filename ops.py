@@ -1,5 +1,8 @@
 import tensorflow as tf
 
+
+
+
 def new_weights(shape, name):
     return tf.get_variable(name, 
                             shape,
@@ -167,10 +170,14 @@ def transition_layer(name,
                             strides=2,
                             scope=name + '_avg_pool_')
     return layer
+
+
 def loss(logits, labels):
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, 
                                                                      labels=labels))
     return loss
+
+
 def accuracy(logits, labels):
     correct_prediction = tf.equal(tf.argmax(tf.nn.softmax(logits), axis=0), 
                                   tf.argmax(labels, axis=0))
