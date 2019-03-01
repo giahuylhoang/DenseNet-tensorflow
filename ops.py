@@ -49,11 +49,11 @@ def batch_normalization(input,
         beta = tf.Variable(name ='beta_', # + scope,
                             initial_value = tf.zeros(shape))
         batchnorm = tf.nn.batch_normalization(input,
-                                                mean = batch_mean,
-                                                variance = batch_var,
-                                                offset = beta,
-                                                scale = gamma,
-                                                variance_epsilon = 1.001e-5)
+                                              mean = batch_mean,
+                                              variance = batch_var,
+                                              offset = beta,
+                                              scale = gamma,
+                                              variance_epsilon = 1.001e-5)
         return batchnorm
 
 
@@ -92,9 +92,9 @@ def global_average_pooling(input,
         input_shape = input.get_shape().as_list()
         strides = ksize = [1] + input_shape[1:3] + [1]
         pooling = tf.nn.avg_pool(input,
-                                    ksize=ksize,
-                                    strides=strides,
-                                     padding='VALID')
+                                 ksize=ksize,
+                                 strides=strides,
+                                 padding='VALID')
     return pooling
 
 
@@ -105,10 +105,11 @@ def max_pooling(input,
     with tf.name_scope(scope):
         ksize = strides = [1, strides, strides, 1]
         pooling = tf.nn.max_pool(input,
-                                    ksize=ksize,
-                                    strides=strides,
-                                    padding=padding)
+                                 ksize=ksize,
+                                 strides=strides,
+                                 padding=padding)
     return pooling
+
 def average_pooling(input, 
                     scope,
                     strides = 2,
@@ -116,16 +117,17 @@ def average_pooling(input,
     with tf.name_scope(scope):
         ksize = strides = [1, strides, strides, 1]
         pooling = tf.nn.avg_pool(value=input,
-                                    ksize=ksize,
-                                    strides=strides,
-                                    padding=padding)
+                                 ksize=ksize,
+                                 strides=strides,
+                                 padding=padding)
+
 def dense_block(name,
-                    input,
-                    num_conv,
-                    growth_rate,
-                    kernel_size,
-                    batch_normalization,
-                    bottleneck):
+                input,
+                num_conv,
+                growth_rate,
+                kernel_size,
+                batch_normalization,
+                bottleneck):
     concat = input
     layer = input
     for l in range(num_conv):
@@ -157,8 +159,8 @@ def dense_block(name,
 
                                                 
 def transition_layer(name,
-                    input,
-                    compression=1.0):
+                     input,
+                     compression=1.0):
     num_channels = input.get_shape().as_list()[-1]
     num_filters = int(num_channels*compression)
     layer = conv2d(input=input,
