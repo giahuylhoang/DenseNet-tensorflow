@@ -54,7 +54,7 @@ def batch_normalization(input,
                                               offset = beta,
                                               scale = gamma,
                                               variance_epsilon = 1.001e-5)
-        return batchnorm
+    return batchnorm
 
 
 def dense_layer(input,
@@ -155,7 +155,7 @@ def dense_block(name,
         concat = tf.concat([concat, layer],
                            axis = 3,
                            name = name + '_concat_' + str(l))
-        return concat
+    return concat
 
                                                 
 def transition_layer(name,
