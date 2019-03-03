@@ -54,6 +54,7 @@ def main():
         if args.phase == 'train':
             network.fit()
             print('Training finished!')
-
+        if args.phase == 'test':
+            network.test()
 if __name__ == '__main__':
     main()
