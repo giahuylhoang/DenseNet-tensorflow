@@ -64,23 +64,25 @@ class DenseNet(object):
                              scope='dense')
         return logits
     def build_graph(self):
-        self.inputs = tf.placeholder(tf.float32, [] + self.input_shape , name='inputs')
+        self.inputs = tf.placeholder(tf.float32, [None] + self.input_shape , name='inputs')
         self.labels = tf.placeholder(tf.float32, [None, self.num_classes], name='labels')
         self.lr = tf.placeholder(tf.float32, name='learning_rate')
         self.logits = self.model(self.inputs)
         with tf.name_scope('loss'):
-            self.loss = loss(logits=self.logits,
-                            labels=self.labels)
+            self.train_loss = loss(logits=self.logits,
+                                   labels=self.labels)
+            self.test_loss = 0
         with tf.name_scope('accuracy'):
-            self.accuracy = accuracy(logits=self.logits,
-                                    labels=self.labels)
+            self.test_accuracy = 0
+            self.train_accuracy = accuracy(logits=self.logits,
+                                           labels=self.labels)
         with tf.name_scope('train'):
-            self.optimizer = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
+            self.optimizer = tf.train.AdamOptimizer(self.lr).minimize(self.train_loss)
 
-        self.train_loss_summary = tf.summary.scalar('train_loss', self.loss)
-        self.test_loss_summary = tf.summary.scalar('test_loss', self.loss)
-        self.train_acc_summary = tf.summary.scalar('train_accuracy', self.accuracy)
-        self.test_acc_summary = tf.summary.scalar('test_accuracy', self.accuracy)
+        self.train_loss_summary = tf.summary.scalar('train_loss', self.train_loss)
+        self.test_loss_summary = tf.summary.scalar('test_loss', self.test_loss)
+        self.train_acc_summary = tf.summary.scalar('train_accuracy', self.train_accuracy)
+        self.test_acc_summary = tf.summary.scalar('test_accuracy', self.test_accuracy)
         self.train_summary = tf.summary.merge([self.train_loss_summary, self.train_acc_summary])
         self.test_summary = tf.summary.merge([self.test_loss_summary, self.test_acc_summary])
     def fit(self):
@@ -95,9 +97,9 @@ class DenseNet(object):
             counter = checkpoint_counter 
             
             if start_epoch >= int(self.epoch * 0.75):
-                epoch_lr = epoch * 0.01
-            elif start_epoch >= int(self.epoch * 0.5) and star_epoch < int(self.epoch * 0.75):
-                epoch_lr = epoch * 0.1
+                epoch_lr = epoch_lr * 0.01
+            elif start_epoch >= int(self.epoch * 0.5) and start_epoch < int(self.epoch * 0.75):
+                epoch_lr = epoch_lr * 0.1
             print('Successfully load saved model')
         else:
             epoch_lr = self.init_lr
@@ -108,34 +110,52 @@ class DenseNet(object):
         start_time = time.time()
         x_train = self.x_train
         y_train = self.y_train
+        if start_epoch == 0:
+            x_train, y_train = shuffle(x_train, y_train)
         for epoch in range(start_epoch, self.epoch):
-            if start_epoch == 0: 
-                x_train, y_train = shuffle(x_train, y_train)
             for index in range(start_batch_id, self.iteration):
                 batch_x = x_train[index*self.batch_size:(index+1)*self.batch_size]
                 batch_y = y_train[index*self.batch_size:(index+1)*self.batch_size]
 
                 _, summary_train, train_loss, train_accuracy = self.sess.run([self.optimizer,
                                                                             self.train_summary,
-                                                                            self.loss,
-                                                                            self.accuracy],
+                                                                            self.train_loss,
+                                                                            self.train_accuracy],
                                                                             feed_dict = 
                                                                             {self.inputs: batch_x,
                                                                              self.labels: batch_y,
                                                                              self.lr: epoch_lr})
-
                 self.writer.add_summary(summary_train, counter)
-                summary_test, test_loss, tess_accuracy = self.sess.run([self.test_summary,
-                                                                        self.loss,
-                                                                        self.accuracy],
-                                                                        feed_dict = 
-                                                                        {self.inputs: self.x_test,
-                                                                         self.labels: self.y_test})
-                self.writer.add_summary(summary_train, counter)
-                print('Epoch: {0:} {1:}, learning_rate {2: .4f}'.format(epoch, index, epoch_lr))
-                print('time: {0: .4f}, train_accuracy {1: .4f}, test_accuracy {2: 4f}'.format(time.time()- start_time,
-                                                                                              train_accuracy, 
-                                                                                              test_accuracy))
+                #Evaluate in test set 
+                num_img = len(self.x_test)
+                num_batch_test = num_img // 512
+                cummulative_loss = 0.0
+                num_correct = 0
+                for index_test in range(num_batch_test):
+                    test_batch_x = self.x_test[index_test*512:(1+index_test)*512]
+                    test_batch_y = self.y_test[index_test*512:(1+index_test)*512]
+                    batch_loss, batch_accuracy = self.sess.run([self.train_loss,
+                                                              self.train_accuracy],
+                                                              feed_dict = {self.inputs: test_batch_x,
+                                                                           self.labels: test_batch_y})
+                    num_correct += batch_accuracy * 512
+                    cummulative_loss += batch_loss * 512
+                if abs(num_batch_test - len(self.x_test) / 512) > 1e-6:
+                    final_batch_x = self.x_test[num_batch_test*512:num_img]
+                    final_batch_y = self.y_test[num_batch_test*512:num_img]
+                    final_loss, final_accuracy = self.sess.run([self.train_loss,
+                                                                self.train_accuracy],
+                                                                feed_dict = {self.inputs: final_batch_x,
+                                                                             self.labels: final_batch_y})
+                    num_correct += final_accuracy * (num_img - num_batch_test)
+                    cummulative_loss += final_loss * (num_img - num_batch_test)
+                self.test_accuracy = num_correct / num_img
+                self.test_loss = cummulative_loss / num_img
+                summary_test = self.sess.run(self.test_summary)
+                self.writer.add_summary(summary_test, counter)
+                print('--------------------------------------')
+                print("Epoch: [%2d] [%5d/%5d] time: %4.4f, train_accuracy: %.4f, train_loss: %6.4f, test_accuracy: %.4f, learning_rate : %.4f" \
+                      % (epoch, index, self.iteration, time.time() - start_time, train_accuracy, train_loss, self.test_accuracy, epoch_lr))
                 counter += 1
             start_batch_id = 0
             self.save(self.checkpoint_dir, counter)
@@ -148,10 +168,30 @@ class DenseNet(object):
             print('Load succesully')
         else:
             print('Load failed')
-        test_loss, tess_accuracy = self.sess.run([self.loss,
-                                                  self.accuracy],
-                                                  feed_dict = {self.inputs: self.x_test,
-                                                               self.labels: self.x_test})
+        num_img = len(self.x_test)
+        num_batch_test = num_img // 512
+        cummulative_loss = 0.0
+        num_correct = 0
+        for index_test in range(num_batch_test):
+            test_batch_x = self.x_test[index_test*512:(1+index_test)*512]
+            test_batch_y = self.y_test[index_test*512:(1+index_test)*512]
+            batch_loss, batch_accuracy = self.sess.run([self.train_loss,
+                                                        self.train_accuracy],
+                                                        feed_dict = {self.inputs: test_batch_x,
+                                                                    self.labels: test_batch_y})
+            num_correct += batch_accuracy * 512
+            cummulative_loss += batch_loss * 512
+        if abs(num_batch_test - len(self.x_test) / 512) > 1e-6:
+            final_batch_x = self.x_test[num_batch_test*512:num_img]
+            final_batch_y = self.y_test[num_batch_test*512:num_img]
+            final_loss, final_accuracy = self.sess.run([self.train_loss,
+                                                        self.train_accuracy],
+                                                        feed_dict = {self.inputs: final_batch_x,
+                                                                    self.labels: final_batch_y})
+            num_correct += final_accuracy * (num_img - num_batch_test)
+            cummulative_loss += final_loss * (num_img - num_batch_test)
+        test_accuracy = num_correct / num_img
+        test_loss = cummulative_loss / num_img
         print('test_loss: {0: .5f}  test_accuracy: {1: .4f}'.format(test_loss, test_accuracy))
     @property
     def model_dir(self):
@@ -161,8 +201,9 @@ class DenseNet(object):
         checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             self.saver.restore(self.sess, ckpt.model_checkpoint_path)
-            counter = ckpt_name.split('-')[-1]
+            counter = int(ckpt_name.split('-')[-1])
             print('Successfully load {}'.format(ckpt_name))
 
             return True, counter
@@ -175,4 +216,4 @@ class DenseNet(object):
         if os.path.exists(checkpoint_dir) == False:
             os.makedirs(checkpoint_dir)
         self.saver.save(self.sess,
-                        os.path.join(checkpoint_dir, self.model_name+'.model', global_step=step))
+                        os.path.join(checkpoint_dir, self.model_name+'.model'), global_step=step)
