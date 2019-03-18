@@ -21,6 +21,4 @@ cifar100
 ### test 
 `python main.py --phase test --dataset cifar10 --lr 0.1`
 ## Related work 
-[DenseNet-cifar](
-        DenseNet-tensorflow/DenseNet_keras.py
-      ): if you're interested, you could check out my implementation of DenseNet using keras
+[DenseNet-cifar](DenseNet-tensorflow/DenseNet_keras.py): if you're interested, you could check out my implementation of DenseNet using keras
